@@ -63,10 +63,35 @@ const App = {
     this.fonts = fonts.map(f => {
       const o = old.get(f.root);
       const det = SSC.detect(f);
-      return Object.assign(f, {det, fmt: o ? o.fmt : det.format, include: o ? o.include : det.format !== this.target && !SSC.isTracksOnly(f), tracksOnly: SSC.isTracksOnly(f), exclude: new Map(), wavBad: o ? o.wavBad : null, open: o ? o.open : false});
+      const sys = SSC.isSystemFolder(f), tracksOnly = SSC.isTracksOnly(f);
+      return Object.assign(f, {det, sys, tracksOnly, alias: o ? o.alias : '', xnum: o ? o.xnum : (/^\d+$/.test(f.name) ? +f.name : null),
+        fmt: o ? o.fmt : det.format, include: o ? o.include : det.format !== this.target && !tracksOnly && !sys, exclude: new Map(), wavBad: o ? o.wavBad : null, open: o ? o.open : false});
     });
+    this.numberFonts();
     this.renderAll();
+    this.loadFontTxt();
     this.scanFonts();
+  },
+
+  /** Xeno3 のフォルダ番号：フォルダ名が数字ならその番号、なければ空いている番号を 1 から順に */
+  numberFonts(){
+    const used = new Set(this.fonts.filter(f => f.xnum).map(f => f.xnum));
+    let n = 1;
+    for (const f of this.fonts) if (!f.xnum && !f.sys && !f.tracksOnly) { while (used.has(n)) n++; f.xnum = n; used.add(n); }
+  },
+  /** Xeno3 の SD にある font.txt（「34 darksaber」の一覧）から音源の名前を拾う */
+  async loadFontTxt(){
+    let changed = false;
+    for (const e of this.entries.filter(e => /(^|\/)font\.txt$/i.test(e.path))) {
+      const dir = e.path.replace(/\/?font\.txt$/i, '');
+      let text = ''; try { text = new TextDecoder().decode(await e.read()); } catch { continue; }
+      for (const line of text.split(/\r?\n/)) {
+        const m = /^\s*(\d+)\s+(.+?)\s*$/.exec(line); if (!m) continue;
+        const f = this.fonts.find(f => f.name === m[1] && f.root === (dir ? dir + '/' : '') + m[1]);
+        if (f && !f.alias) { f.alias = m[2]; changed = true; }
+      }
+    }
+    if (changed) this.renderPreview();
   },
 
   /** WAV の形式チェックと、Proffie の別名の重複チェック（どちらも中身を読むので後から） */
@@ -101,7 +126,7 @@ const App = {
   },
 
   planFor(f){
-    const pl = SSC.plan(f, f.fmt, this.target, Object.assign({}, this.opts, {exclude: f.exclude.get(f.fmt)}));
+    const pl = SSC.plan(f, f.fmt, this.target, Object.assign({}, this.opts, {exclude: f.exclude.get(f.fmt), xenoNum: f.xnum || 1}));
     SSC.uniquePaths(pl.items.concat(pl.extra).concat(pl.unmapped));
     return pl;
   },
@@ -142,10 +167,11 @@ const App = {
       ${tg === 'proffie' ? `<label class="inl">${t('optDigits')} <select id="oDigits">${[1, 2, 3].map(d => `<option value="${d}"${o.digits === d ? ' selected' : ''}>${['1, 2, 3', '01, 02, 03', '001, 002, 003'][d - 1]}</option>`).join('')}</select></label>
       <label class="chk"><input type="checkbox" id="oIni"${o.addIni ? ' checked' : ''}>${t('optIni')}</label>` : ''}
       ${tg === 'cfx' ? `<label class="chk"><input type="checkbox" id="oMelt"${o.meltToDrag ? ' checked' : ''}>${t('optMelt')}</label>` : ''}
-      ${tg === 'xeno3' ? `<small>—</small>` : ''}`;
-    const save = () => { store.set('opts', {digits: o.digits, addIni: o.addIni, meltToDrag: o.meltToDrag}); this.last = null; this.renderPreview(); this.renderBar(); };
+      ${tg === 'xeno3' ? `<label class="chk"><input type="checkbox" id="oXIni"${o.xenoIni ? ' checked' : ''}>${t('optXenoIni')}</label>` : ''}`;
+    const save = () => { store.set('opts', {digits: o.digits, addIni: o.addIni, meltToDrag: o.meltToDrag, xenoIni: o.xenoIni}); this.last = null; this.renderPreview(); this.renderBar(); };
     if ($('oDigits')) $('oDigits').onchange = e => { o.digits = +e.target.value; save(); };
     if ($('oIni')) $('oIni').onchange = e => { o.addIni = e.target.checked; save(); };
+    if ($('oXIni')) $('oXIni').onchange = e => { o.xenoIni = e.target.checked; save(); };
     if ($('oMelt')) $('oMelt').onchange = e => { o.meltToDrag = e.target.checked; save(); };
   },
 
@@ -176,16 +202,19 @@ const App = {
       if (f.wavBad && f.wavBad.length) warns.push(t('wFormat', {n: f.wavBad.length, f: f.wavBad[0].rel, fmt: f.wavBad[0].fmt}));
       if (f.fmt === this.target) warns.unshift(t('same'));
       if (f.tracksOnly) warns.unshift(t('wTracksOnly'));
+      if (f.sys) warns.unshift(t('wSystem'));
+      if (this.target === 'xeno3' && f.include && this.selected().some(g => g !== f && g.xnum === f.xnum)) warns.unshift(t('wNumDup', {n: f.xnum}));
       const fmtSel = Object.values(SSC.FORMATS).map(F => `<option value="${F.id}"${F.id === f.fmt ? ' selected' : ''}>${F.label}${F.inputOnly ? ' *' : ''}</option>`).join('');
       const all = pl.items.concat(pl.extra.map(x => ({out: x.out, src: {rel: '(new)'}}))).map(i => `${i.src.rel}  →  ${i.out}`).join('\n');
       const un = pl.unmapped.map(u => `<li><span class="mono">${esc(u.src.rel)}</span> <small>— ${esc(t('why')[u.why] || u.why)}</small></li>`).join('');
       return `<section class="font${f.include ? '' : ' off'}" data-fi="${fi}">
         <div class="font-h">
           <label class="chk"><input type="checkbox" data-inc="${fi}"${f.include ? ' checked' : ''}><span class="sr">${t('include')}</span></label>
-          <b class="fname">${esc(f.name)}</b><small class="mono froot">${esc(f.root || '/')}</small>
+          <b class="fname">${esc(f.name)}</b>${f.alias ? `<span class="falias">${esc(f.alias)}</span>` : ''}<small class="mono froot">${esc(f.root || '/')}</small>
           <span class="hsp"></span>
           <label class="mono fsel"><span>${t('detected')}</span><select data-fmt="${fi}" aria-label="${t('detected')}">${fmtSel}</select></label>
           <span class="mono farrow">→ <b>${tgtLabel}</b></span>
+          ${this.target === 'xeno3' && !f.sys && !f.tracksOnly ? `<label class="mono fnum" title="${esc(t('xnumTip'))}"><span>${t('xnum')}</span><input type="number" min="1" max="999" data-num="${fi}" value="${f.xnum || 1}"></label>` : ''}
         </div>
         <div class="fstats mono"><span>${f.files.length} ${t('files')}</span><span class="ok">${wavItems.length} ${t('converted')}</span>${pl.unmapped.length ? `<span class="wn">${pl.unmapped.length} ${t('unmapped')}</span>` : ''}${SSC.FORMATS[f.fmt].inputOnly ? `<span>* ${t('inputOnly')}</span>` : ''}</div>
         ${warns.length ? `<ul class="warns">${warns.map(w => `<li>${esc(w)}</li>`).join('')}</ul>` : ''}
@@ -195,6 +224,10 @@ const App = {
       </section>`;
     }).join('');
     el.querySelectorAll('[data-inc]').forEach(c => c.onchange = () => { this.fonts[+c.dataset.inc].include = c.checked; this.last = null; this.renderPreview(); this.renderBar(); });
+    el.querySelectorAll('[data-num]').forEach(i => i.onchange = () => {
+      const v = Math.max(1, Math.min(999, parseInt(i.value, 10) || 1));
+      this.fonts[+i.dataset.num].xnum = v; this.last = null; this.renderPreview(); this.renderBar();
+    });
     el.querySelectorAll('[data-fmt]').forEach(s => s.onchange = async () => {
       const f = this.fonts[+s.dataset.fmt]; f.fmt = s.value; this.last = null;
       this.renderPreview(); this.renderBar(); await this.checkDupes();
@@ -227,14 +260,16 @@ const App = {
     const used = new Set();
     for (const f of sel) {
       const pl = this.planFor(f);
-      let dir = f.name.replace(/[<>:"|?*\\/]/g, '_') || 'font', k = 2;
-      while (used.has(dir.toLowerCase())) dir = `${f.name}_${k++}`;
+      // Xeno3 はフォルダ番号がフォルダ名。他は名前（font.txt の名前があればそれ）
+      const base = tg === 'xeno3' ? String(f.xnum || 1) : (f.alias || f.name);
+      let dir = base.replace(/[<>:"|?*\\/]/g, '_') || 'font', k = 2;
+      while (used.has(dir.toLowerCase())) dir = `${base}_${k++}`;
       used.add(dir.toLowerCase());
-      log.push(`==== ${f.name}  (${f.root || '/'})  ${SSC.label(f.fmt)} → ${T}`);
+      log.push(`==== ${f.name}${f.alias ? ' ' + f.alias : ''}  (${f.root || '/'})  ${SSC.label(f.fmt)} → ${T}  [${dir}/]`);
       for (const w of pl.warnings) log.push(`! ${t(w.key, w.args)}`);
       if (f.wavBad && f.wavBad.length) { log.push(`! ${t('wFormat', {n: f.wavBad.length, f: f.wavBad[0].rel, fmt: f.wavBad[0].fmt})}`); for (const b of f.wavBad) log.push(`    ${b.rel}  ${b.fmt}`); }
-      for (const it of pl.items) { jobs.push({path: `${dir}/${it.out}`, src: it.src}); log.push(`  ${it.src.rel}  →  ${it.out}${it.note === 'unverified' ? '   [unverified]' : it.note === 'copy' ? '   [copy]' : ''}`); }
-      for (const x of pl.extra) { jobs.push({path: `${dir}/${x.out}`, text: x.text}); log.push(`  (new)  →  ${x.out}`); }
+      for (const it of pl.items) { jobs.push({path: `${dir}/${it.out}`, src: it.src, renum: it.rewriteNum}); log.push(`  ${it.src.rel}  →  ${it.out}${it.note === 'unverified' ? '   [unverified]' : it.note === 'copy' ? '   [copy]' : ''}`); }
+      for (const x of pl.extra) { jobs.push({path: `${dir}/${x.out}`, text: x.text}); log.push(`  (new)  →  ${x.out}${x.out === 'fontconfig.ini' ? '   ' + x.text : ''}`); }
       for (const u of pl.unmapped) { jobs.push({path: `${dir}/${u.out}`, src: u.src}); log.push(`  ${u.src.rel}  →  ${u.out}   [${t('why')[u.why] || u.why}]`); }
       log.push('');
     }
@@ -245,7 +280,9 @@ const App = {
       for (let i = 0; i < jobs.length; i++) {
         const j = jobs[i];
         this.busyStep(i, jobs.length, j.path);
-        zw.add(j.path, j.text != null ? enc.encode(j.text) : await j.src.entry.read());
+        let data = j.text != null ? enc.encode(j.text) : await j.src.entry.read();
+        if (j.renum) data = enc.encode(SSC.xenoRenum(new TextDecoder().decode(data), j.renum));
+        zw.add(j.path, data);
         if (i % 8 === 7) await new Promise(r => setTimeout(r));
       }
       zw.add('conversion_log.txt', enc.encode('﻿' + logText));

@@ -24,7 +24,7 @@ function download(name, blob){
 }
 
 /** ツールの版（ログとお問い合わせメールに入れる） */
-const APP_VER = '0.1.1 (2026-11-22)';
+const APP_VER = '0.2 (2026-11-22)';
 /** お店の情報 */
 const SHOP = {name: 'SYBER SABERS', url: 'https://sybersabers.com/', mail: ['info', 'sybersabers.com'], utm: 'utm_source=soundconverter&utm_medium=referral&utm_campaign=saber_sound_converter'};
 const shopUrl = (path = '') => SHOP.url + path + (path.includes('?') ? '&' : '?') + SHOP.utm;

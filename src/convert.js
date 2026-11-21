@@ -9,7 +9,7 @@
 const SSC = (() => {
 
   /** 無視するファイル（OS が勝手に作るもの） */
-  const JUNK = /(^|\/)(__MACOSX\/|\.DS_Store$|\._|Thumbs\.db$|desktop\.ini$|\.Spotlight|\.Trashes|System Volume Information\/)/i;
+  const JUNK = /(^|\/)(__MACOSX\/|\.DS_Store$|\._|Thumbs\.db$|desktop\.ini$|\.Spotlight|\.Trashes|System Volume Information\/|\.font$)/i;
   const isWav = p => /\.wav$/i.test(p);
   const AUDIO_OTHER = /\.(mp3|ogg|flac|aif|aiff|m4a)$/i;
   const baseName = p => p.slice(p.lastIndexOf('/') + 1);
@@ -56,7 +56,7 @@ const SSC = (() => {
       lightningblock: 'lb', beginlightningblock: 'bgnlb', endlightningblock: 'endlb',
       // 既存ツールの綴り違い（lighting）も読めるようにする
       lightingblock: 'lb', beginlightingblock: 'bgnlb', endlightingblock: 'endlb',
-      poweron: 'boot', track: 'track'
+      spin: 'spin', track: 'track'
     },
     write: {
       hum: 'hum', in: 'in', out: 'out', font: 'font', preon: 'preon', pstoff: 'postoff',
@@ -65,10 +65,10 @@ const SSC = (() => {
       drag: 'drag', bgndrag: 'begindrag', enddrag: 'enddrag',
       melt: 'melt', bgnmelt: 'beginmelt', endmelt: 'endmelt',
       lb: 'lightningblock', bgnlb: 'beginlightningblock', endlb: 'endlightningblock',
-      boot: 'poweron', track: 'track'
+      spin: 'spin', track: 'track'
     },
     /** 実物で確認できていない対応（画面と記録に「未確認」と出す） */
-    unverified: new Set(['boot', 'pstoff', 'quote', 'preon', 'stab'])
+    unverified: new Set(['pstoff', 'quote'])
   };
 
   F.cfx = {
@@ -175,6 +175,16 @@ const SSC = (() => {
   }
 
   /* ---------- 2. 形式の自動判定 ---------- */
+  /**
+   * Xeno3 の fontconfig.ini（1行）。fontN の N は SD カード上のフォルダ番号。
+   * 既定値：青 (0,0,255)、STEADY BLADE(1)、効果は各1番目、STANDARD BLADE(0)、点灯 200／消灯 500（説明書きの基本値）
+   */
+  const xenoIni = n => `font${n}=(0,0,255),1,1,0,0,0,0,200,500`;
+  /** Xeno3 の fontconfig.ini の番号を書き換える */
+  const xenoRenum = (text, n) => text.replace(/^([ \t\ufeff]*)font\d+[ \t]*=/im, `$1font${n}=`);
+  /** Xeno3 の setting/ のようなシステム音フォルダ（音源ではない） */
+  const isSystemFolder = font => font.files.some(x => /^(fontnotfound|sdcarderror|configorfoldererror|lowbattery)\.wav$/i.test(x.rel));
+
   /** BGM（tracks）しか入っていない＝音源ではなく、SD カード直下の共通 BGM フォルダ */
   const isTracksOnly = font => { const w = font.files.filter(x => isWav(x.rel)); return w.length > 0 && w.every(x => /^tracks?\//i.test(x.rel)); };
 
@@ -255,7 +265,7 @@ const SSC = (() => {
   }
 
   /* ---------- 4. 変換先のファイル名を決める ---------- */
-  const DEFAULT_OPTS = {digits: 2, meltToDrag: false, addIni: true};
+  const DEFAULT_OPTS = {digits: 2, meltToDrag: false, addIni: true, xenoIni: true};
 
   /** Proffie 用の smoothsw.ini（ProffieOS の既定値＋Version=2）。無いと SmoothSwing が V1 扱いになるため、swingh／swingl があるときだけ足す */
   const PROFFIE_SMOOTHSW = [
@@ -272,6 +282,7 @@ const SSC = (() => {
   function plan(font, srcFmt, target, opts = {}){
     opts = Object.assign({}, DEFAULT_OPTS, opts);
     const P = parse(font, srcFmt), tdef = F[target];
+    const xnum = opts.xenoNum || 1;
     const dropped = [];
     if (opts.exclude && opts.exclude.size) for (const [t, list] of P.types) {
       const keep = list.filter(x => !opts.exclude.has(x.f));
@@ -325,9 +336,12 @@ const SSC = (() => {
       const keep = (target === 'proffie' && /^(config\.ini|smoothsw\.ini)$/.test(n) && srcFmt === 'proffie')
         || (target === 'cfx' && /^(font_config\.txt|leds\.txt)$/.test(n) && srcFmt === 'cfx')
         || (target === 'xeno3' && n === 'fontconfig.ini' && srcFmt === 'xeno3');
-      if (keep) items.push({out: baseName(c.rel), src: c, type: 'config', note: ''});
+      if (target === 'xeno3' && srcFmt === 'xeno3' && n === 'fontconfig.ini') items.push({out: 'fontconfig.ini', src: c, type: 'config', note: '', rewriteNum: xnum});
+      else if (keep) items.push({out: baseName(c.rel), src: c, type: 'config', note: ''});
       else unmapped.push({out: '_unmapped/' + c.rel, src: c, why: 'config'});
     }
+    // Xeno3：フォルダ番号つきの fontconfig.ini（1行）がなければ既定値で足す
+    if (target === 'xeno3' && opts.xenoIni && !items.some(i => i.out === 'fontconfig.ini')) extra.push({out: 'fontconfig.ini', text: xenoIni(xnum)});
     // Proffie：SmoothSwing のペアがあって smoothsw.ini がなければ足す
     if (target === 'proffie' && opts.addIni) {
       const has = n => items.some(i => i.out.toLowerCase() === n);
@@ -398,6 +412,6 @@ const SSC = (() => {
   /** 対象外の形式（Verso／Asteria）や判定結果の表示用 */
   const label = id => (F[id] || {}).label || id;
 
-  return {isTracksOnly, FORMATS, TARGETS, PROFFIE_TYPES, groupFonts, detect, parse, plan, findMixedDupes, uniquePaths, splitName, label, DEFAULT_OPTS, isWav};
+  return {isTracksOnly, isSystemFolder, xenoIni, xenoRenum, FORMATS, TARGETS, PROFFIE_TYPES, groupFonts, detect, parse, plan, findMixedDupes, uniquePaths, splitName, label, DEFAULT_OPTS, isWav};
 })();
 if (typeof module !== 'undefined') module.exports = SSC;
