@@ -63,7 +63,7 @@ const App = {
     this.fonts = fonts.map(f => {
       const o = old.get(f.root);
       const det = SSC.detect(f);
-      return Object.assign(f, {det, fmt: o ? o.fmt : det.format, include: o ? o.include : det.format !== this.target, exclude: new Map(), wavBad: o ? o.wavBad : null, open: o ? o.open : false});
+      return Object.assign(f, {det, fmt: o ? o.fmt : det.format, include: o ? o.include : det.format !== this.target && !SSC.isTracksOnly(f), tracksOnly: SSC.isTracksOnly(f), exclude: new Map(), wavBad: o ? o.wavBad : null, open: o ? o.open : false});
     });
     this.renderAll();
     this.scanFonts();
@@ -131,7 +131,7 @@ const App = {
     $('tgts').querySelectorAll('[data-tgt]').forEach(b => b.onclick = () => {
       const prev = this.target; this.target = b.dataset.tgt; store.set('target', this.target);
       // 「変換先と同じ形式なので外す」を付け直す
-      for (const f of this.fonts) { if (f.fmt === this.target) f.include = false; else if (f.fmt === prev) f.include = true; }
+      for (const f of this.fonts) { if (f.fmt === this.target) f.include = false; else if (f.fmt === prev && !f.tracksOnly) f.include = true; }
       this.last = null; this.renderTarget(); this.renderOpts(); this.renderPreview(); this.renderBar();
     });
     this.renderOpts();
@@ -175,6 +175,7 @@ const App = {
       const warns = pl.warnings.map(w => t(w.key, w.args));
       if (f.wavBad && f.wavBad.length) warns.push(t('wFormat', {n: f.wavBad.length, f: f.wavBad[0].rel, fmt: f.wavBad[0].fmt}));
       if (f.fmt === this.target) warns.unshift(t('same'));
+      if (f.tracksOnly) warns.unshift(t('wTracksOnly'));
       const fmtSel = Object.values(SSC.FORMATS).map(F => `<option value="${F.id}"${F.id === f.fmt ? ' selected' : ''}>${F.label}${F.inputOnly ? ' *' : ''}</option>`).join('');
       const all = pl.items.concat(pl.extra.map(x => ({out: x.out, src: {rel: '(new)'}}))).map(i => `${i.src.rel}  →  ${i.out}`).join('\n');
       const un = pl.unmapped.map(u => `<li><span class="mono">${esc(u.src.rel)}</span> <small>— ${esc(t('why')[u.why] || u.why)}</small></li>`).join('');

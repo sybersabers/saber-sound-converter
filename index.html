@@ -335,6 +335,8 @@ ja: {
   wDupDropped: '同じ音の重複を外しました：{f}',
   wUnmapped: '{n} ファイルは変換先に対応する名前がないので _unmapped に入れます',
   wUnverified: '実物で未確認の対応があります：{t}',
+  wDirName: 'フォルダ名とファイル名が違うファイルは、フォルダ名（ProffieOS と同じ）の種類として扱いました：{f}',
+  wTracksOnly: '音源ではなく共通の BGM（tracks）フォルダのようなので、最初は外しています',
   wFormat: '44.1kHz／16bit／モノラル以外の WAV が {n} 個あります（例：{f} = {fmt}）。ボードによっては鳴らないことがあります',
   wFormatChk: 'WAV の形式を確認中…',
   unverifiedTip: '実物の音源で未確認の対応',
@@ -378,6 +380,8 @@ en: {
   wDupDropped: 'Removed duplicate sound(s): {f}',
   wUnmapped: '{n} file(s) have no matching name on the target and go to _unmapped',
   wUnverified: 'Some mappings are not yet confirmed with a real font: {t}',
+  wDirName: 'File name differs from its folder; typed by the folder name (as ProffieOS does): {f}',
+  wTracksOnly: 'Looks like a shared BGM (tracks) folder rather than a font, so unchecked',
   wFormat: '{n} WAV file(s) are not 44.1kHz/16-bit/mono (e.g. {f} = {fmt}). Some boards may not play them',
   wFormatChk: 'Checking WAV formats…',
   unverifiedTip: 'Not yet confirmed with a real font',
@@ -518,14 +522,34 @@ const SSC = (() => {
 
   /** Asteria の種類フォルダ（フォルダ名とファイル名が違うもの） */
   const ASTERIA_DIRS = {hyswing: /^swing\d*$/, swing: /^sw\d+_[hl]$/, in: /^(poweroff|pwroff)\d*$/, out: /^poweron\d*$/, hum: /^humm?\d*$/};
-  /** そのファイルの親フォルダが「種類フォルダ」（clsh/clsh01.wav、tracks/、Blaster/blaster2.wav など）か */
-  function inEffectDir(p){
-    const d = dirName(p); if (!d) return false;
-    const dir = baseName(d).toLowerCase(), b = stripExt(baseName(p)).toLowerCase();
-    if (dir === 'tracks') return true;
-    if (/^\d+$/.test(b)) return true;                                   // clsh/001.wav
-    if (b.replace(/[\s_-]*\(?\d*\)?$/, '') === dir) return true;          // clsh/clsh01.wav、Blaster/blaster2.wav
-    return !!(ASTERIA_DIRS[dir] && ASTERIA_DIRS[dir].test(b));
+  /** 種類フォルダとして知っている名前（どれかの形式で読める名前＋tracks） */
+  let KNOWN = null;
+  const known = () => KNOWN || (KNOWN = new Set(['tracks', ...Object.values(F).flatMap(d => Object.keys(d.read))]));
+  /** ファイル名から番号を外した「種類の部分」 */
+  const typePart = p => stripExt(baseName(p)).toLowerCase().replace(/[\s_-]*\(?\d*\)?$/, '');
+
+  /**
+   * 「種類フォルダ」（clsh/、tracks/、Blaster/ など）の一覧を作る。
+   * ProffieOS は font/clsh/xxx.wav の「clsh」で種類を決めるので、フォルダ名を優先する。
+   * ただし font/ のように中に色々な種類が入っているフォルダは音源そのもの（種類フォルダではない）。
+   */
+  function effectDirs(paths){
+    const parts = new Map();
+    for (const p of paths) {
+      const d = dirName(p); if (!d) continue;
+      if (!parts.has(d)) parts.set(d, new Set());
+      parts.get(d).add(typePart(p));
+    }
+    const out = new Set();
+    for (const [d, set] of parts) {
+      const dir = baseName(d).toLowerCase();
+      if (dir === 'tracks') { out.add(d); continue; }
+      if (ASTERIA_DIRS[dir] && [...set].every(b => ASTERIA_DIRS[dir].test(b) || ASTERIA_DIRS[dir].test(b + '1'))) { out.add(d); continue; }
+      // 中のファイルが 1 種類（番号違いだけ）で、フォルダ名が知っている名前、またはファイル名と同じ
+      const bases = [...set].filter(b => b !== '');
+      if (bases.length <= 1 && (known().has(dir) || bases[0] === dir)) out.add(d);
+    }
+    return out;
   }
 
   /* ---------- 1. フォントごとに分ける ---------- */
@@ -536,7 +560,8 @@ const SSC = (() => {
    */
   function groupFonts(entries, rootName = 'font'){
     const ok = entries.filter(e => !JUNK.test(e.path) && !e.path.endsWith('/'));
-    const fontRootOf = p => inEffectDir(p) ? dirName(dirName(p)) : dirName(p);
+    const eff = effectDirs(ok.filter(e => isWav(e.path) || AUDIO_OTHER.test(e.path)).map(e => e.path));
+    const fontRootOf = p => eff.has(dirName(p)) ? dirName(dirName(p)) : dirName(p);
     const roots = new Set(ok.filter(e => isWav(e.path) || AUDIO_OTHER.test(e.path)).map(e => fontRootOf(e.path)));
     // 音声のないファイル（設定ファイルなど）は、いちばん近い祖先のフォントに入れる
     const findRoot = p => { let d = dirName(p); for (;;) { if (roots.has(d)) return d; if (!d) return null; d = dirName(d); } };
@@ -558,6 +583,9 @@ const SSC = (() => {
   }
 
   /* ---------- 2. 形式の自動判定 ---------- */
+  /** BGM（tracks）しか入っていない＝音源ではなく、SD カード直下の共通 BGM フォルダ */
+  const isTracksOnly = font => { const w = font.files.filter(x => isWav(x.rel)); return w.length > 0 && w.every(x => /^tracks?\//i.test(x.rel)); };
+
   function detect(font){
     const s = {proffie: 0, xeno3: 0, cfx: 0, verso: 0, asteria: 0};
     let wavs = 0;
@@ -596,7 +624,9 @@ const SSC = (() => {
     if (!m) m = /^(.*?)[\s_-]*(\d*)$/.exec(file);         // clash1 / clsh01 / clash_01 / 001
     let name = m[1], num = m[2] ? +m[2] : 0;
     if (!name && dir) name = dir;                          // clsh/001.wav
-    if (dir === 'tracks' || dir === 'track') return {name: 'track', num, keep: parts[parts.length - 1]};
+    if (dir === 'tracks' || dir === 'track') return {name: 'track', num, keep: baseName(rel)};
+    // 種類フォルダの中（clsh/xxx.wav）はフォルダ名を優先（ProffieOS と同じ）。ファイル名と違えば記録
+    if (dir && parts.length === 2 && F[fmt].read[dir] && name !== dir) return {name: dir, num, misnamed: name};
     if (fmt === 'cfx' && name === 'pwroff' && num === 2) return {name: 'pwroff2', num: 0};
     return {name, num};
   }
@@ -620,7 +650,7 @@ const SSC = (() => {
       const type = def.read[key];
       if (!type) { unknown.push({f, why: 'unknownName'}); continue; }
       if (!types.has(type)) types.set(type, []);
-      types.get(type).push({f, name: sp.name, num: sp.num, keep: sp.keep});
+      types.get(type).push({f, name: sp.name, num: sp.num, keep: sp.keep, misnamed: sp.misnamed});
     }
     // 番号順（数値で）。番号なしは先頭。CFX の消灯は poweroff → pwroff2 → poweroff2… の順
     const rank = x => {
@@ -714,6 +744,8 @@ const SSC = (() => {
     if (target === 'proffie' && !(types.has('swingh') && types.has('swingl')) && types.has('swng')) warnings.push({key: 'wNoSmooth', args: {}});
     if (!types.has('hum')) warnings.push({key: 'wNoHum', args: {}});
     for (const t of mixed) warnings.push({key: 'wMixed', args: {t}});
+    const mis = [...P.types.values()].flat().filter(x => x.misnamed && x.misnamed !== '').map(x => x.f.rel);
+    if (mis.length) warnings.push({key: 'wDirName', args: {n: mis.length, f: mis.join(', ')}});
     if (dropped.length) warnings.push({key: 'wDupDropped', args: {n: dropped.length, f: dropped.map(f => f.rel).join(', ')}});
     if (unmapped.length) warnings.push({key: 'wUnmapped', args: {n: unmapped.length}});
     const unv = [...new Set(items.filter(i => i.note === 'unverified').map(i => i.type))];
@@ -774,7 +806,7 @@ const SSC = (() => {
   /** 対象外の形式（Verso／Asteria）や判定結果の表示用 */
   const label = id => (F[id] || {}).label || id;
 
-  return {FORMATS, TARGETS, PROFFIE_TYPES, groupFonts, detect, parse, plan, findMixedDupes, uniquePaths, splitName, label, DEFAULT_OPTS, isWav};
+  return {isTracksOnly, FORMATS, TARGETS, PROFFIE_TYPES, groupFonts, detect, parse, plan, findMixedDupes, uniquePaths, splitName, label, DEFAULT_OPTS, isWav};
 })();
 // (Node のテスト用)
 if (typeof module !== 'undefined') module.exports = SSC;
@@ -971,7 +1003,7 @@ function download(name, blob){
 }
 
 /** ツールの版（ログとお問い合わせメールに入れる） */
-const APP_VER = '0.1 (2026-11-22)';
+const APP_VER = '0.1.1 (2026-11-22)';
 /** お店の情報 */
 const SHOP = {name: 'SYBER SABERS', url: 'https://sybersabers.com/', mail: ['info', 'sybersabers.com'], utm: 'utm_source=soundconverter&utm_medium=referral&utm_campaign=saber_sound_converter'};
 const shopUrl = (path = '') => SHOP.url + path + (path.includes('?') ? '&' : '?') + SHOP.utm;
@@ -1094,7 +1126,7 @@ const App = {
     this.fonts = fonts.map(f => {
       const o = old.get(f.root);
       const det = SSC.detect(f);
-      return Object.assign(f, {det, fmt: o ? o.fmt : det.format, include: o ? o.include : det.format !== this.target, exclude: new Map(), wavBad: o ? o.wavBad : null, open: o ? o.open : false});
+      return Object.assign(f, {det, fmt: o ? o.fmt : det.format, include: o ? o.include : det.format !== this.target && !SSC.isTracksOnly(f), tracksOnly: SSC.isTracksOnly(f), exclude: new Map(), wavBad: o ? o.wavBad : null, open: o ? o.open : false});
     });
     this.renderAll();
     this.scanFonts();
@@ -1162,7 +1194,7 @@ const App = {
     $('tgts').querySelectorAll('[data-tgt]').forEach(b => b.onclick = () => {
       const prev = this.target; this.target = b.dataset.tgt; store.set('target', this.target);
       // 「変換先と同じ形式なので外す」を付け直す
-      for (const f of this.fonts) { if (f.fmt === this.target) f.include = false; else if (f.fmt === prev) f.include = true; }
+      for (const f of this.fonts) { if (f.fmt === this.target) f.include = false; else if (f.fmt === prev && !f.tracksOnly) f.include = true; }
       this.last = null; this.renderTarget(); this.renderOpts(); this.renderPreview(); this.renderBar();
     });
     this.renderOpts();
@@ -1206,6 +1238,7 @@ const App = {
       const warns = pl.warnings.map(w => t(w.key, w.args));
       if (f.wavBad && f.wavBad.length) warns.push(t('wFormat', {n: f.wavBad.length, f: f.wavBad[0].rel, fmt: f.wavBad[0].fmt}));
       if (f.fmt === this.target) warns.unshift(t('same'));
+      if (f.tracksOnly) warns.unshift(t('wTracksOnly'));
       const fmtSel = Object.values(SSC.FORMATS).map(F => `<option value="${F.id}"${F.id === f.fmt ? ' selected' : ''}>${F.label}${F.inputOnly ? ' *' : ''}</option>`).join('');
       const all = pl.items.concat(pl.extra.map(x => ({out: x.out, src: {rel: '(new)'}}))).map(i => `${i.src.rel}  →  ${i.out}`).join('\n');
       const un = pl.unmapped.map(u => `<li><span class="mono">${esc(u.src.rel)}</span> <small>— ${esc(t('why')[u.why] || u.why)}</small></li>`).join('');

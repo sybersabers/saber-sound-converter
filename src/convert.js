@@ -114,14 +114,34 @@ const SSC = (() => {
 
   /** Asteria の種類フォルダ（フォルダ名とファイル名が違うもの） */
   const ASTERIA_DIRS = {hyswing: /^swing\d*$/, swing: /^sw\d+_[hl]$/, in: /^(poweroff|pwroff)\d*$/, out: /^poweron\d*$/, hum: /^humm?\d*$/};
-  /** そのファイルの親フォルダが「種類フォルダ」（clsh/clsh01.wav、tracks/、Blaster/blaster2.wav など）か */
-  function inEffectDir(p){
-    const d = dirName(p); if (!d) return false;
-    const dir = baseName(d).toLowerCase(), b = stripExt(baseName(p)).toLowerCase();
-    if (dir === 'tracks') return true;
-    if (/^\d+$/.test(b)) return true;                                   // clsh/001.wav
-    if (b.replace(/[\s_-]*\(?\d*\)?$/, '') === dir) return true;          // clsh/clsh01.wav、Blaster/blaster2.wav
-    return !!(ASTERIA_DIRS[dir] && ASTERIA_DIRS[dir].test(b));
+  /** 種類フォルダとして知っている名前（どれかの形式で読める名前＋tracks） */
+  let KNOWN = null;
+  const known = () => KNOWN || (KNOWN = new Set(['tracks', ...Object.values(F).flatMap(d => Object.keys(d.read))]));
+  /** ファイル名から番号を外した「種類の部分」 */
+  const typePart = p => stripExt(baseName(p)).toLowerCase().replace(/[\s_-]*\(?\d*\)?$/, '');
+
+  /**
+   * 「種類フォルダ」（clsh/、tracks/、Blaster/ など）の一覧を作る。
+   * ProffieOS は font/clsh/xxx.wav の「clsh」で種類を決めるので、フォルダ名を優先する。
+   * ただし font/ のように中に色々な種類が入っているフォルダは音源そのもの（種類フォルダではない）。
+   */
+  function effectDirs(paths){
+    const parts = new Map();
+    for (const p of paths) {
+      const d = dirName(p); if (!d) continue;
+      if (!parts.has(d)) parts.set(d, new Set());
+      parts.get(d).add(typePart(p));
+    }
+    const out = new Set();
+    for (const [d, set] of parts) {
+      const dir = baseName(d).toLowerCase();
+      if (dir === 'tracks') { out.add(d); continue; }
+      if (ASTERIA_DIRS[dir] && [...set].every(b => ASTERIA_DIRS[dir].test(b) || ASTERIA_DIRS[dir].test(b + '1'))) { out.add(d); continue; }
+      // 中のファイルが 1 種類（番号違いだけ）で、フォルダ名が知っている名前、またはファイル名と同じ
+      const bases = [...set].filter(b => b !== '');
+      if (bases.length <= 1 && (known().has(dir) || bases[0] === dir)) out.add(d);
+    }
+    return out;
   }
 
   /* ---------- 1. フォントごとに分ける ---------- */
@@ -132,7 +152,8 @@ const SSC = (() => {
    */
   function groupFonts(entries, rootName = 'font'){
     const ok = entries.filter(e => !JUNK.test(e.path) && !e.path.endsWith('/'));
-    const fontRootOf = p => inEffectDir(p) ? dirName(dirName(p)) : dirName(p);
+    const eff = effectDirs(ok.filter(e => isWav(e.path) || AUDIO_OTHER.test(e.path)).map(e => e.path));
+    const fontRootOf = p => eff.has(dirName(p)) ? dirName(dirName(p)) : dirName(p);
     const roots = new Set(ok.filter(e => isWav(e.path) || AUDIO_OTHER.test(e.path)).map(e => fontRootOf(e.path)));
     // 音声のないファイル（設定ファイルなど）は、いちばん近い祖先のフォントに入れる
     const findRoot = p => { let d = dirName(p); for (;;) { if (roots.has(d)) return d; if (!d) return null; d = dirName(d); } };
@@ -154,6 +175,9 @@ const SSC = (() => {
   }
 
   /* ---------- 2. 形式の自動判定 ---------- */
+  /** BGM（tracks）しか入っていない＝音源ではなく、SD カード直下の共通 BGM フォルダ */
+  const isTracksOnly = font => { const w = font.files.filter(x => isWav(x.rel)); return w.length > 0 && w.every(x => /^tracks?\//i.test(x.rel)); };
+
   function detect(font){
     const s = {proffie: 0, xeno3: 0, cfx: 0, verso: 0, asteria: 0};
     let wavs = 0;
@@ -192,7 +216,9 @@ const SSC = (() => {
     if (!m) m = /^(.*?)[\s_-]*(\d*)$/.exec(file);         // clash1 / clsh01 / clash_01 / 001
     let name = m[1], num = m[2] ? +m[2] : 0;
     if (!name && dir) name = dir;                          // clsh/001.wav
-    if (dir === 'tracks' || dir === 'track') return {name: 'track', num, keep: parts[parts.length - 1]};
+    if (dir === 'tracks' || dir === 'track') return {name: 'track', num, keep: baseName(rel)};
+    // 種類フォルダの中（clsh/xxx.wav）はフォルダ名を優先（ProffieOS と同じ）。ファイル名と違えば記録
+    if (dir && parts.length === 2 && F[fmt].read[dir] && name !== dir) return {name: dir, num, misnamed: name};
     if (fmt === 'cfx' && name === 'pwroff' && num === 2) return {name: 'pwroff2', num: 0};
     return {name, num};
   }
@@ -216,7 +242,7 @@ const SSC = (() => {
       const type = def.read[key];
       if (!type) { unknown.push({f, why: 'unknownName'}); continue; }
       if (!types.has(type)) types.set(type, []);
-      types.get(type).push({f, name: sp.name, num: sp.num, keep: sp.keep});
+      types.get(type).push({f, name: sp.name, num: sp.num, keep: sp.keep, misnamed: sp.misnamed});
     }
     // 番号順（数値で）。番号なしは先頭。CFX の消灯は poweroff → pwroff2 → poweroff2… の順
     const rank = x => {
@@ -310,6 +336,8 @@ const SSC = (() => {
     if (target === 'proffie' && !(types.has('swingh') && types.has('swingl')) && types.has('swng')) warnings.push({key: 'wNoSmooth', args: {}});
     if (!types.has('hum')) warnings.push({key: 'wNoHum', args: {}});
     for (const t of mixed) warnings.push({key: 'wMixed', args: {t}});
+    const mis = [...P.types.values()].flat().filter(x => x.misnamed && x.misnamed !== '').map(x => x.f.rel);
+    if (mis.length) warnings.push({key: 'wDirName', args: {n: mis.length, f: mis.join(', ')}});
     if (dropped.length) warnings.push({key: 'wDupDropped', args: {n: dropped.length, f: dropped.map(f => f.rel).join(', ')}});
     if (unmapped.length) warnings.push({key: 'wUnmapped', args: {n: unmapped.length}});
     const unv = [...new Set(items.filter(i => i.note === 'unverified').map(i => i.type))];
@@ -370,6 +398,6 @@ const SSC = (() => {
   /** 対象外の形式（Verso／Asteria）や判定結果の表示用 */
   const label = id => (F[id] || {}).label || id;
 
-  return {FORMATS, TARGETS, PROFFIE_TYPES, groupFonts, detect, parse, plan, findMixedDupes, uniquePaths, splitName, label, DEFAULT_OPTS, isWav};
+  return {isTracksOnly, FORMATS, TARGETS, PROFFIE_TYPES, groupFonts, detect, parse, plan, findMixedDupes, uniquePaths, splitName, label, DEFAULT_OPTS, isWav};
 })();
 if (typeof module !== 'undefined') module.exports = SSC;
