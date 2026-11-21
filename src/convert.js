@@ -177,9 +177,9 @@ const SSC = (() => {
   /* ---------- 2. 形式の自動判定 ---------- */
   /**
    * Xeno3 の fontconfig.ini（1行）。先頭の名前は何でもよいので、元のフォルダ名を入れる（例：qui=(…)）。
-   * 既定値：青 (0,0,255)、STEADY BLADE(1)、効果は各1番目、STANDARD BLADE(0)、点灯 200／消灯 500（説明書きの基本値）
+   * 既定値：青 (0,0,255)、STEADY BLADE(1)、効果は各1番目、STANDARD BLADE(0)、点灯 300／消灯 400（SYBER SABERS の標準）
    */
-  const xenoIni = key => `${key}=(0,0,255),1,1,0,0,0,0,200,500`;
+  const xenoIni = key => `${key}=(0,0,255),1,1,0,0,0,0,300,400`;
   /** fontconfig.ini の先頭に使える名前にする（スペース → _、英数字と _ - 以外は外す。何も残らなければ font） */
   const xenoKey = name => String(name).trim().replace(/\s+/g, '_').replace(/[^A-Za-z0-9_-]/g, '') || 'font';
   /** Xeno3 の setting/ のようなシステム音フォルダ（音源ではない） */
@@ -265,14 +265,8 @@ const SSC = (() => {
   }
 
   /* ---------- 4. 変換先のファイル名を決める ---------- */
-  const DEFAULT_OPTS = {digits: 2, meltToDrag: false, addIni: true, xenoIni: true};
+  const DEFAULT_OPTS = {digits: 2, meltToDrag: true, xenoIni: true};
 
-  /** Proffie 用の smoothsw.ini（ProffieOS の既定値＋Version=2）。無いと SmoothSwing が V1 扱いになるため、swingh／swingl があるときだけ足す */
-  const PROFFIE_SMOOTHSW = [
-    '# smoothsw.ini — added by Saber Sound Converter (ProffieOS default values)',
-    'Version=2', 'SwingSensitivity=450.0', 'MaximumHumDucking=75.0', 'SwingSharpness=1.75',
-    'SwingStrengthThreshold=20.0', 'Transition1Degrees=45.0', 'Transition2Degrees=160.0', 'MaxSwingVolume=3.0', ''
-  ].join('\r\n');
 
   /**
    * font を target 形式にしたときの出力一覧を作る。
@@ -341,11 +335,6 @@ const SSC = (() => {
     }
     // Xeno3：フォルダ番号つきの fontconfig.ini（1行）がなければ既定値で足す
     if (target === 'xeno3' && opts.xenoIni && !items.some(i => i.out === 'fontconfig.ini')) extra.push({out: 'fontconfig.ini', text: xenoIni(xkey)});
-    // Proffie：SmoothSwing のペアがあって smoothsw.ini がなければ足す
-    if (target === 'proffie' && opts.addIni) {
-      const has = n => items.some(i => i.out.toLowerCase() === n);
-      if (!has('smoothsw.ini') && types.has('swingh') && types.has('swingl')) extra.push({out: 'smoothsw.ini', text: PROFFIE_SMOOTHSW});
-    }
     if (target === 'proffie' && !(types.has('swingh') && types.has('swingl')) && types.has('swng')) warnings.push({key: 'wNoSmooth', args: {}});
     if (!types.has('hum')) warnings.push({key: 'wNoHum', args: {}});
     for (const t of mixed) warnings.push({key: 'wMixed', args: {t}});

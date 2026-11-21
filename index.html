@@ -197,8 +197,6 @@
   .fname{font-family:var(--disp);font-size:18px;letter-spacing:.04em;color:#fff}
   .froot{color:#6f93a8}
   .falias{color:#cfe3ee;font-size:14px}
-  .fnum{display:flex;align-items:center;gap:6px;font-size:11px;color:var(--muted);letter-spacing:.08em}
-  .fnum input{width:68px;padding:4px 6px;font-family:var(--mono);background:var(--chip);color:#fff;border:1px solid rgba(55,226,255,.45)}
   .hsp{flex:1}
   .fsel{display:flex;align-items:center;gap:6px;font-size:11px;color:var(--muted);letter-spacing:.08em}
   .fsel select{padding:4px 6px;font-family:var(--mono)}
@@ -321,7 +319,7 @@ ja: {
   loaded: '{fonts} 個の音源・{files} ファイル', loading: '読み込み中…',
   ignored: '音声が入っていない {n} ファイルは対象外にしました',
   tgtEx: {proffie: 'clsh/clsh01.wav', xeno3: 'clash (1).wav', cfx: 'clash1.wav'},
-  opts: '詳細設定', optDigits: 'Proffie の番号の桁数', optIni: 'Proffie：SmoothSwing の設定ファイル（smoothsw.ini）がなければ既定値を追加',
+  opts: '詳細設定', optDigits: 'Proffie の番号の桁数',
   optMelt: 'CFX：メルトの音をドラッグにまとめる（しないときは _unmapped へ）',
   noFonts: '音源を入れると、ここに変換前 → 変換後の一覧が出ます。',
   detected: '判定', include: '変換する', same: '変換先と同じ形式なので、最初は外しています',
@@ -340,9 +338,7 @@ ja: {
   wUnverified: '実物で未確認の対応があります：{t}',
   wDirName: 'フォルダ名とファイル名が違うファイルは、フォルダ名（ProffieOS と同じ）の種類として扱いました：{f}',
   wSystem: 'Xeno3 のシステム音フォルダ（setting）のようなので、最初は外しています',
-  wNumDup: 'フォルダ番号 {n} がほかの音源と重なっています',
-  xnum: 'フォルダ番号', xnumTip: 'Xeno3 の SD カードでのフォルダ番号（出力フォルダ名になります）',
-  optXenoIni: 'XENO3：fontconfig.ini がなければ既定値を追加（青・点灯 200／消灯 500）',
+  optXenoIni: 'XENO3：fontconfig.ini がなければ既定値を追加（青・点灯 300／消灯 400）',
   wTracksOnly: '音源ではなく共通の BGM（tracks）フォルダのようなので、最初は外しています',
   wFormat: '44.1kHz／16bit／モノラル以外の WAV が {n} 個あります（例：{f} = {fmt}）。ボードによっては鳴らないことがあります',
   wFormatChk: 'WAV の形式を確認中…',
@@ -370,7 +366,7 @@ en: {
   loaded: '{fonts} font(s), {files} files', loading: 'Loading…',
   ignored: '{n} file(s) outside any font were skipped',
   tgtEx: {proffie: 'clsh/clsh01.wav', xeno3: 'clash (1).wav', cfx: 'clash1.wav'},
-  opts: 'Options', optDigits: 'Proffie number digits', optIni: 'Proffie: add a default smoothsw.ini if missing',
+  opts: 'Options', optDigits: 'Proffie number digits',
   optMelt: 'CFX: put melt sounds into drag (otherwise they go to _unmapped)',
   noFonts: 'Add a sound font to see the before → after list here.',
   detected: 'Detected', include: 'Convert', same: 'Already in the target format, so unchecked',
@@ -389,9 +385,7 @@ en: {
   wUnverified: 'Some mappings are not yet confirmed with a real font: {t}',
   wDirName: 'File name differs from its folder; typed by the folder name (as ProffieOS does): {f}',
   wSystem: 'Looks like the Xeno3 system sound folder (setting), so unchecked',
-  wNumDup: 'Folder number {n} is used by another font',
-  xnum: 'Folder No.', xnumTip: 'Folder number on the Xeno3 SD card (used as the output folder name)',
-  optXenoIni: 'XENO3: add a default fontconfig.ini if missing (blue, on 200 / off 500)',
+  optXenoIni: 'XENO3: add a default fontconfig.ini if missing (blue, on 300 / off 400)',
   wTracksOnly: 'Looks like a shared BGM (tracks) folder rather than a font, so unchecked',
   wFormat: '{n} WAV file(s) are not 44.1kHz/16-bit/mono (e.g. {f} = {fmt}). Some boards may not play them',
   wFormatChk: 'Checking WAV formats…',
@@ -596,9 +590,9 @@ const SSC = (() => {
   /* ---------- 2. 形式の自動判定 ---------- */
   /**
    * Xeno3 の fontconfig.ini（1行）。先頭の名前は何でもよいので、元のフォルダ名を入れる（例：qui=(…)）。
-   * 既定値：青 (0,0,255)、STEADY BLADE(1)、効果は各1番目、STANDARD BLADE(0)、点灯 200／消灯 500（説明書きの基本値）
+   * 既定値：青 (0,0,255)、STEADY BLADE(1)、効果は各1番目、STANDARD BLADE(0)、点灯 300／消灯 400（SYBER SABERS の標準）
    */
-  const xenoIni = key => `${key}=(0,0,255),1,1,0,0,0,0,200,500`;
+  const xenoIni = key => `${key}=(0,0,255),1,1,0,0,0,0,300,400`;
   /** fontconfig.ini の先頭に使える名前にする（スペース → _、英数字と _ - 以外は外す。何も残らなければ font） */
   const xenoKey = name => String(name).trim().replace(/\s+/g, '_').replace(/[^A-Za-z0-9_-]/g, '') || 'font';
   /** Xeno3 の setting/ のようなシステム音フォルダ（音源ではない） */
@@ -684,14 +678,8 @@ const SSC = (() => {
   }
 
   /* ---------- 4. 変換先のファイル名を決める ---------- */
-  const DEFAULT_OPTS = {digits: 2, meltToDrag: false, addIni: true, xenoIni: true};
+  const DEFAULT_OPTS = {digits: 2, meltToDrag: true, xenoIni: true};
 
-  /** Proffie 用の smoothsw.ini（ProffieOS の既定値＋Version=2）。無いと SmoothSwing が V1 扱いになるため、swingh／swingl があるときだけ足す */
-  const PROFFIE_SMOOTHSW = [
-    '# smoothsw.ini — added by Saber Sound Converter (ProffieOS default values)',
-    'Version=2', 'SwingSensitivity=450.0', 'MaximumHumDucking=75.0', 'SwingSharpness=1.75',
-    'SwingStrengthThreshold=20.0', 'Transition1Degrees=45.0', 'Transition2Degrees=160.0', 'MaxSwingVolume=3.0', ''
-  ].join('\r\n');
 
   /**
    * font を target 形式にしたときの出力一覧を作る。
@@ -760,11 +748,6 @@ const SSC = (() => {
     }
     // Xeno3：フォルダ番号つきの fontconfig.ini（1行）がなければ既定値で足す
     if (target === 'xeno3' && opts.xenoIni && !items.some(i => i.out === 'fontconfig.ini')) extra.push({out: 'fontconfig.ini', text: xenoIni(xkey)});
-    // Proffie：SmoothSwing のペアがあって smoothsw.ini がなければ足す
-    if (target === 'proffie' && opts.addIni) {
-      const has = n => items.some(i => i.out.toLowerCase() === n);
-      if (!has('smoothsw.ini') && types.has('swingh') && types.has('swingl')) extra.push({out: 'smoothsw.ini', text: PROFFIE_SMOOTHSW});
-    }
     if (target === 'proffie' && !(types.has('swingh') && types.has('swingl')) && types.has('swng')) warnings.push({key: 'wNoSmooth', args: {}});
     if (!types.has('hum')) warnings.push({key: 'wNoHum', args: {}});
     for (const t of mixed) warnings.push({key: 'wMixed', args: {t}});
@@ -1027,7 +1010,7 @@ function download(name, blob){
 }
 
 /** ツールの版（ログとお問い合わせメールに入れる） */
-const APP_VER = '0.2.1 (2026-11-22)';
+const APP_VER = '0.3 (2026-11-22)';
 /** お店の情報 */
 const SHOP = {name: 'SYBER SABERS', url: 'https://sybersabers.com/', mail: ['info', 'sybersabers.com'], utm: 'utm_source=soundconverter&utm_medium=referral&utm_campaign=saber_sound_converter'};
 const shopUrl = (path = '') => SHOP.url + path + (path.includes('?') ? '&' : '?') + SHOP.utm;
@@ -1096,7 +1079,7 @@ const App = {
   init(){
     lang = store.get('lang', (navigator.language || '').toLowerCase().startsWith('ja') ? 'ja' : 'en');
     this.target = store.get('target', 'proffie');
-    this.opts = Object.assign({}, SSC.DEFAULT_OPTS, store.get('opts', {}));
+    this.opts = Object.assign({}, SSC.DEFAULT_OPTS, store.get('opts2', {}));
     $('langSel').value = lang;
     $('langSel').onchange = e => { lang = e.target.value; store.set('lang', lang); this.renderAll(); };
     $('dlgOk').onclick = () => $('dlg').close();
@@ -1151,21 +1134,14 @@ const App = {
       const o = old.get(f.root);
       const det = SSC.detect(f);
       const sys = SSC.isSystemFolder(f), tracksOnly = SSC.isTracksOnly(f);
-      return Object.assign(f, {det, sys, tracksOnly, alias: o ? o.alias : '', xnum: o ? o.xnum : (/^\d+$/.test(f.name) ? +f.name : null),
+      return Object.assign(f, {det, sys, tracksOnly, alias: o ? o.alias : '',
         fmt: o ? o.fmt : det.format, include: o ? o.include : det.format !== this.target && !tracksOnly && !sys, exclude: new Map(), wavBad: o ? o.wavBad : null, open: o ? o.open : false});
     });
-    this.numberFonts();
     this.renderAll();
     this.loadFontTxt();
     this.scanFonts();
   },
 
-  /** Xeno3 のフォルダ番号：フォルダ名が数字ならその番号、なければ空いている番号を 1 から順に */
-  numberFonts(){
-    const used = new Set(this.fonts.filter(f => f.xnum).map(f => f.xnum));
-    let n = 1;
-    for (const f of this.fonts) if (!f.xnum && !f.sys && !f.tracksOnly) { while (used.has(n)) n++; f.xnum = n; used.add(n); }
-  },
   /** Xeno3 の SD にある font.txt（「34 darksaber」の一覧）から音源の名前を拾う */
   async loadFontTxt(){
     let changed = false;
@@ -1252,12 +1228,11 @@ const App = {
     const o = this.opts, tg = this.target;
     $('opts').innerHTML = `
       ${tg === 'proffie' ? `<label class="inl">${t('optDigits')} <select id="oDigits">${[1, 2, 3].map(d => `<option value="${d}"${o.digits === d ? ' selected' : ''}>${['1, 2, 3', '01, 02, 03', '001, 002, 003'][d - 1]}</option>`).join('')}</select></label>
-      <label class="chk"><input type="checkbox" id="oIni"${o.addIni ? ' checked' : ''}>${t('optIni')}</label>` : ''}
+` : ''}
       ${tg === 'cfx' ? `<label class="chk"><input type="checkbox" id="oMelt"${o.meltToDrag ? ' checked' : ''}>${t('optMelt')}</label>` : ''}
       ${tg === 'xeno3' ? `<label class="chk"><input type="checkbox" id="oXIni"${o.xenoIni ? ' checked' : ''}>${t('optXenoIni')}</label>` : ''}`;
-    const save = () => { store.set('opts', {digits: o.digits, addIni: o.addIni, meltToDrag: o.meltToDrag, xenoIni: o.xenoIni}); this.last = null; this.renderPreview(); this.renderBar(); };
+    const save = () => { store.set('opts2', {digits: o.digits, meltToDrag: o.meltToDrag, xenoIni: o.xenoIni}); this.last = null; this.renderPreview(); this.renderBar(); };
     if ($('oDigits')) $('oDigits').onchange = e => { o.digits = +e.target.value; save(); };
-    if ($('oIni')) $('oIni').onchange = e => { o.addIni = e.target.checked; save(); };
     if ($('oXIni')) $('oXIni').onchange = e => { o.xenoIni = e.target.checked; save(); };
     if ($('oMelt')) $('oMelt').onchange = e => { o.meltToDrag = e.target.checked; save(); };
   },
@@ -1290,7 +1265,6 @@ const App = {
       if (f.fmt === this.target) warns.unshift(t('same'));
       if (f.tracksOnly) warns.unshift(t('wTracksOnly'));
       if (f.sys) warns.unshift(t('wSystem'));
-      if (this.target === 'xeno3' && f.include && this.selected().some(g => g !== f && g.xnum === f.xnum)) warns.unshift(t('wNumDup', {n: f.xnum}));
       const fmtSel = Object.values(SSC.FORMATS).map(F => `<option value="${F.id}"${F.id === f.fmt ? ' selected' : ''}>${F.label}${F.inputOnly ? ' *' : ''}</option>`).join('');
       const all = pl.items.concat(pl.extra.map(x => ({out: x.out, src: {rel: '(new)'}}))).map(i => `${i.src.rel}  →  ${i.out}`).join('\n');
       const un = pl.unmapped.map(u => `<li><span class="mono">${esc(u.src.rel)}</span> <small>— ${esc(t('why')[u.why] || u.why)}</small></li>`).join('');
@@ -1301,7 +1275,6 @@ const App = {
           <span class="hsp"></span>
           <label class="mono fsel"><span>${t('detected')}</span><select data-fmt="${fi}" aria-label="${t('detected')}">${fmtSel}</select></label>
           <span class="mono farrow">→ <b>${tgtLabel}</b></span>
-          ${this.target === 'xeno3' && !f.sys && !f.tracksOnly ? `<label class="mono fnum" title="${esc(t('xnumTip'))}"><span>${t('xnum')}</span><input type="number" min="1" max="999" data-num="${fi}" value="${f.xnum || 1}"></label>` : ''}
         </div>
         <div class="fstats mono"><span>${f.files.length} ${t('files')}</span><span class="ok">${wavItems.length} ${t('converted')}</span>${pl.unmapped.length ? `<span class="wn">${pl.unmapped.length} ${t('unmapped')}</span>` : ''}${SSC.FORMATS[f.fmt].inputOnly ? `<span>* ${t('inputOnly')}</span>` : ''}</div>
         ${warns.length ? `<ul class="warns">${warns.map(w => `<li>${esc(w)}</li>`).join('')}</ul>` : ''}
@@ -1311,10 +1284,6 @@ const App = {
       </section>`;
     }).join('');
     el.querySelectorAll('[data-inc]').forEach(c => c.onchange = () => { this.fonts[+c.dataset.inc].include = c.checked; this.last = null; this.renderPreview(); this.renderBar(); });
-    el.querySelectorAll('[data-num]').forEach(i => i.onchange = () => {
-      const v = Math.max(1, Math.min(999, parseInt(i.value, 10) || 1));
-      this.fonts[+i.dataset.num].xnum = v; this.last = null; this.renderPreview(); this.renderBar();
-    });
     el.querySelectorAll('[data-fmt]').forEach(s => s.onchange = async () => {
       const f = this.fonts[+s.dataset.fmt]; f.fmt = s.value; this.last = null;
       this.renderPreview(); this.renderBar(); await this.checkDupes();
@@ -1343,12 +1312,12 @@ const App = {
     this.busy = true; document.body.classList.add('is-busy'); this.renderBar();
     const tg = this.target, T = SSC.label(tg);
     const jobs = [];
-    const log = [`Saber Sound Converter ${APP_VER}`, `${fmtDate()}  →  ${T}`, `Options: ${JSON.stringify({digits: this.opts.digits, addIni: this.opts.addIni, meltToDrag: this.opts.meltToDrag})}`, ''];
+    const log = [`Saber Sound Converter ${APP_VER}`, `${fmtDate()}  →  ${T}`, `Options: ${JSON.stringify({digits: this.opts.digits, meltToDrag: this.opts.meltToDrag, xenoIni: this.opts.xenoIni})}`, ''];
     const used = new Set();
     for (const f of sel) {
       const pl = this.planFor(f);
-      // Xeno3 はフォルダ番号がフォルダ名。他は名前（font.txt の名前があればそれ）
-      const base = tg === 'xeno3' ? String(f.xnum || 1) : (f.alias || f.name);
+      // 元のフォルダ名のまま（ユーザーが必要ならリネーム）。Xeno3 以外へは、番号フォルダなら font.txt の名前を使う
+      const base = tg === 'xeno3' ? f.name : (f.alias || f.name);
       let dir = base.replace(/[<>:"|?*\\/]/g, '_') || 'font', k = 2;
       while (used.has(dir.toLowerCase())) dir = `${base}_${k++}`;
       used.add(dir.toLowerCase());
