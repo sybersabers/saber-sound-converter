@@ -126,7 +126,7 @@ const App = {
   },
 
   planFor(f){
-    const pl = SSC.plan(f, f.fmt, this.target, Object.assign({}, this.opts, {exclude: f.exclude.get(f.fmt), xenoNum: f.xnum || 1}));
+    const pl = SSC.plan(f, f.fmt, this.target, Object.assign({}, this.opts, {exclude: f.exclude.get(f.fmt), xenoKey: /^\d+$/.test(f.name) && f.alias ? f.alias : f.name}));
     SSC.uniquePaths(pl.items.concat(pl.extra).concat(pl.unmapped));
     return pl;
   },
@@ -268,7 +268,7 @@ const App = {
       log.push(`==== ${f.name}${f.alias ? ' ' + f.alias : ''}  (${f.root || '/'})  ${SSC.label(f.fmt)} → ${T}  [${dir}/]`);
       for (const w of pl.warnings) log.push(`! ${t(w.key, w.args)}`);
       if (f.wavBad && f.wavBad.length) { log.push(`! ${t('wFormat', {n: f.wavBad.length, f: f.wavBad[0].rel, fmt: f.wavBad[0].fmt})}`); for (const b of f.wavBad) log.push(`    ${b.rel}  ${b.fmt}`); }
-      for (const it of pl.items) { jobs.push({path: `${dir}/${it.out}`, src: it.src, renum: it.rewriteNum}); log.push(`  ${it.src.rel}  →  ${it.out}${it.note === 'unverified' ? '   [unverified]' : it.note === 'copy' ? '   [copy]' : ''}`); }
+      for (const it of pl.items) { jobs.push({path: `${dir}/${it.out}`, src: it.src}); log.push(`  ${it.src.rel}  →  ${it.out}${it.note === 'unverified' ? '   [unverified]' : it.note === 'copy' ? '   [copy]' : ''}`); }
       for (const x of pl.extra) { jobs.push({path: `${dir}/${x.out}`, text: x.text}); log.push(`  (new)  →  ${x.out}${x.out === 'fontconfig.ini' ? '   ' + x.text : ''}`); }
       for (const u of pl.unmapped) { jobs.push({path: `${dir}/${u.out}`, src: u.src}); log.push(`  ${u.src.rel}  →  ${u.out}   [${t('why')[u.why] || u.why}]`); }
       log.push('');
@@ -280,9 +280,7 @@ const App = {
       for (let i = 0; i < jobs.length; i++) {
         const j = jobs[i];
         this.busyStep(i, jobs.length, j.path);
-        let data = j.text != null ? enc.encode(j.text) : await j.src.entry.read();
-        if (j.renum) data = enc.encode(SSC.xenoRenum(new TextDecoder().decode(data), j.renum));
-        zw.add(j.path, data);
+        zw.add(j.path, j.text != null ? enc.encode(j.text) : await j.src.entry.read());
         if (i % 8 === 7) await new Promise(r => setTimeout(r));
       }
       zw.add('conversion_log.txt', enc.encode('﻿' + logText));

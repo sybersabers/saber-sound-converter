@@ -176,12 +176,12 @@ const SSC = (() => {
 
   /* ---------- 2. 形式の自動判定 ---------- */
   /**
-   * Xeno3 の fontconfig.ini（1行）。fontN の N は SD カード上のフォルダ番号。
+   * Xeno3 の fontconfig.ini（1行）。先頭の名前は何でもよいので、元のフォルダ名を入れる（例：qui=(…)）。
    * 既定値：青 (0,0,255)、STEADY BLADE(1)、効果は各1番目、STANDARD BLADE(0)、点灯 200／消灯 500（説明書きの基本値）
    */
-  const xenoIni = n => `font${n}=(0,0,255),1,1,0,0,0,0,200,500`;
-  /** Xeno3 の fontconfig.ini の番号を書き換える */
-  const xenoRenum = (text, n) => text.replace(/^([ \t\ufeff]*)font\d+[ \t]*=/im, `$1font${n}=`);
+  const xenoIni = key => `${key}=(0,0,255),1,1,0,0,0,0,200,500`;
+  /** fontconfig.ini の先頭に使える名前にする（スペース → _、英数字と _ - 以外は外す。何も残らなければ font） */
+  const xenoKey = name => String(name).trim().replace(/\s+/g, '_').replace(/[^A-Za-z0-9_-]/g, '') || 'font';
   /** Xeno3 の setting/ のようなシステム音フォルダ（音源ではない） */
   const isSystemFolder = font => font.files.some(x => /^(fontnotfound|sdcarderror|configorfoldererror|lowbattery)\.wav$/i.test(x.rel));
 
@@ -282,7 +282,7 @@ const SSC = (() => {
   function plan(font, srcFmt, target, opts = {}){
     opts = Object.assign({}, DEFAULT_OPTS, opts);
     const P = parse(font, srcFmt), tdef = F[target];
-    const xnum = opts.xenoNum || 1;
+    const xkey = xenoKey(opts.xenoKey || font.name);
     const dropped = [];
     if (opts.exclude && opts.exclude.size) for (const [t, list] of P.types) {
       const keep = list.filter(x => !opts.exclude.has(x.f));
@@ -336,12 +336,11 @@ const SSC = (() => {
       const keep = (target === 'proffie' && /^(config\.ini|smoothsw\.ini)$/.test(n) && srcFmt === 'proffie')
         || (target === 'cfx' && /^(font_config\.txt|leds\.txt)$/.test(n) && srcFmt === 'cfx')
         || (target === 'xeno3' && n === 'fontconfig.ini' && srcFmt === 'xeno3');
-      if (target === 'xeno3' && srcFmt === 'xeno3' && n === 'fontconfig.ini') items.push({out: 'fontconfig.ini', src: c, type: 'config', note: '', rewriteNum: xnum});
-      else if (keep) items.push({out: baseName(c.rel), src: c, type: 'config', note: ''});
+      if (keep) items.push({out: baseName(c.rel), src: c, type: 'config', note: ''});
       else unmapped.push({out: '_unmapped/' + c.rel, src: c, why: 'config'});
     }
     // Xeno3：フォルダ番号つきの fontconfig.ini（1行）がなければ既定値で足す
-    if (target === 'xeno3' && opts.xenoIni && !items.some(i => i.out === 'fontconfig.ini')) extra.push({out: 'fontconfig.ini', text: xenoIni(xnum)});
+    if (target === 'xeno3' && opts.xenoIni && !items.some(i => i.out === 'fontconfig.ini')) extra.push({out: 'fontconfig.ini', text: xenoIni(xkey)});
     // Proffie：SmoothSwing のペアがあって smoothsw.ini がなければ足す
     if (target === 'proffie' && opts.addIni) {
       const has = n => items.some(i => i.out.toLowerCase() === n);
@@ -412,6 +411,6 @@ const SSC = (() => {
   /** 対象外の形式（Verso／Asteria）や判定結果の表示用 */
   const label = id => (F[id] || {}).label || id;
 
-  return {isTracksOnly, isSystemFolder, xenoIni, xenoRenum, FORMATS, TARGETS, PROFFIE_TYPES, groupFonts, detect, parse, plan, findMixedDupes, uniquePaths, splitName, label, DEFAULT_OPTS, isWav};
+  return {isTracksOnly, isSystemFolder, xenoIni, xenoKey, FORMATS, TARGETS, PROFFIE_TYPES, groupFonts, detect, parse, plan, findMixedDupes, uniquePaths, splitName, label, DEFAULT_OPTS, isWav};
 })();
 if (typeof module !== 'undefined') module.exports = SSC;
