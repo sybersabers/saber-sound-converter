@@ -89,7 +89,8 @@ const SSC = (() => {
       force: 'force', quote: 'force',
       lock: 'lockup', bgnlock: 'startlock', endlock: 'endlock',
       drag: 'drag', bgndrag: 'startdrag', enddrag: 'enddrag',
-      ccchange: 'color', track: 'track'
+      ccchange: 'color', track: 'track',
+      preon: 'preon', spin: 'spin', stab: 'stab'   // The Metallic Jaw の CFX 版で確認（1 から番号）
     },
     /** 番号パターン A（1つ目は番号なし、2つ目から 2,3…）。それ以外は B（1 から番号） */
     plainFirst: new Set(['blaster', 'boot', 'poweron', 'poweronf', 'font', 'force', 'lockup', 'drag', 'color', 'poweroff']),
@@ -182,6 +183,11 @@ const SSC = (() => {
   const xenoIni = key => `${key}=(0,0,255),1,1,0,0,0,0,300,400`;
   /** fontconfig.ini の先頭に使える名前にする（スペース → _、英数字と _ - 以外は外す。何も残らなければ font） */
   const xenoKey = name => String(name).trim().replace(/\s+/g, '_').replace(/[^A-Za-z0-9_-]/g, '') || 'font';
+  /**
+   * 素材フォルダ（音源パッケージの _Extras/Music、_Extras/Quotes など）：
+   * どの形式で読んでも BGM 以外の効果音（hum・clash など）が 1 つも見つからない
+   */
+  const isExtras = font => !Object.keys(F).some(k => [...parse(font, k).types.keys()].some(t => t !== 'track'));
   /** Xeno3 の setting/ のようなシステム音フォルダ（音源ではない） */
   const isSystemFolder = font => font.files.some(x => /^(fontnotfound|sdcarderror|configorfoldererror|lowbattery)\.wav$/i.test(x.rel));
 
@@ -400,6 +406,6 @@ const SSC = (() => {
   /** 対象外の形式（Verso／Asteria）や判定結果の表示用 */
   const label = id => (F[id] || {}).label || id;
 
-  return {isTracksOnly, isSystemFolder, xenoIni, xenoKey, FORMATS, TARGETS, PROFFIE_TYPES, groupFonts, detect, parse, plan, findMixedDupes, uniquePaths, splitName, label, DEFAULT_OPTS, isWav};
+  return {isTracksOnly, isExtras, isSystemFolder, xenoIni, xenoKey, FORMATS, TARGETS, PROFFIE_TYPES, groupFonts, detect, parse, plan, findMixedDupes, uniquePaths, splitName, label, DEFAULT_OPTS, isWav};
 })();
 if (typeof module !== 'undefined') module.exports = SSC;

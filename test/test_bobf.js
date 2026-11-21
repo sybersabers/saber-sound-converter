@@ -31,6 +31,7 @@ const read = f => fs.readFileSync(f.entry.abs);
   console.log('fonts:', fonts.map(f => `${f.name}(${f.files.length})`).join(' '), ' ignored:', ignored.length);
   const byFmt = {};
   for (const f of fonts) {
+    if (SSC.isExtras(f) || SSC.isTracksOnly(f)) { console.log(`  skip ${f.name}（素材フォルダ）`); continue; }
     const d = SSC.detect(f);
     console.log(`  detect ${f.name.padEnd(10)} → ${d.format}${d.sure ? '' : ' (?)'}  ${JSON.stringify(d.scores)}`);
     byFmt[d.format] = f;

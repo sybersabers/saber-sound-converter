@@ -337,6 +337,7 @@ ja: {
   wUnmapped: '変換先に対応する名前のないファイル（{n} 個）は _unmapped フォルダに入れます',
   wUnverified: '実物で未確認の対応があります：{t}',
   wDirName: 'フォルダ名とファイル名が違うファイルは、フォルダ名（ProffieOS と同じ）の種類として扱いました：{f}',
+  wExtras: '効果音（hum・clash など）が見つからないので、音源ではなく素材フォルダ（BGM・セリフなど）として最初は外しています',
   wSystem: 'Xeno3 のシステム音フォルダ（setting）のようなので、最初は外しています',
   optXenoIni: 'XENO3：fontconfig.ini がなければ既定値を追加（青・点灯 300／消灯 400）',
   wTracksOnly: '音源ではなく共通の BGM（tracks）フォルダのようなので、最初は外しています',
@@ -384,6 +385,7 @@ en: {
   wUnmapped: '{n} file(s) with no matching name on the target go to the _unmapped folder',
   wUnverified: 'Some mappings are not yet confirmed with a real font: {t}',
   wDirName: 'File name differs from its folder; typed by the folder name (as ProffieOS does): {f}',
+  wExtras: 'No effect sounds (hum, clash…) found — looks like an extras folder (music, quotes…), so unchecked',
   wSystem: 'Looks like the Xeno3 system sound folder (setting), so unchecked',
   optXenoIni: 'XENO3: add a default fontconfig.ini if missing (blue, on 300 / off 400)',
   wTracksOnly: 'Looks like a shared BGM (tracks) folder rather than a font, so unchecked',
@@ -502,7 +504,8 @@ const SSC = (() => {
       force: 'force', quote: 'force',
       lock: 'lockup', bgnlock: 'startlock', endlock: 'endlock',
       drag: 'drag', bgndrag: 'startdrag', enddrag: 'enddrag',
-      ccchange: 'color', track: 'track'
+      ccchange: 'color', track: 'track',
+      preon: 'preon', spin: 'spin', stab: 'stab'   // The Metallic Jaw の CFX 版で確認（1 から番号）
     },
     /** 番号パターン A（1つ目は番号なし、2つ目から 2,3…）。それ以外は B（1 から番号） */
     plainFirst: new Set(['blaster', 'boot', 'poweron', 'poweronf', 'font', 'force', 'lockup', 'drag', 'color', 'poweroff']),
@@ -595,6 +598,11 @@ const SSC = (() => {
   const xenoIni = key => `${key}=(0,0,255),1,1,0,0,0,0,300,400`;
   /** fontconfig.ini の先頭に使える名前にする（スペース → _、英数字と _ - 以外は外す。何も残らなければ font） */
   const xenoKey = name => String(name).trim().replace(/\s+/g, '_').replace(/[^A-Za-z0-9_-]/g, '') || 'font';
+  /**
+   * 素材フォルダ（音源パッケージの _Extras/Music、_Extras/Quotes など）：
+   * どの形式で読んでも BGM 以外の効果音（hum・clash など）が 1 つも見つからない
+   */
+  const isExtras = font => !Object.keys(F).some(k => [...parse(font, k).types.keys()].some(t => t !== 'track'));
   /** Xeno3 の setting/ のようなシステム音フォルダ（音源ではない） */
   const isSystemFolder = font => font.files.some(x => /^(fontnotfound|sdcarderror|configorfoldererror|lowbattery)\.wav$/i.test(x.rel));
 
@@ -813,7 +821,7 @@ const SSC = (() => {
   /** 対象外の形式（Verso／Asteria）や判定結果の表示用 */
   const label = id => (F[id] || {}).label || id;
 
-  return {isTracksOnly, isSystemFolder, xenoIni, xenoKey, FORMATS, TARGETS, PROFFIE_TYPES, groupFonts, detect, parse, plan, findMixedDupes, uniquePaths, splitName, label, DEFAULT_OPTS, isWav};
+  return {isTracksOnly, isExtras, isSystemFolder, xenoIni, xenoKey, FORMATS, TARGETS, PROFFIE_TYPES, groupFonts, detect, parse, plan, findMixedDupes, uniquePaths, splitName, label, DEFAULT_OPTS, isWav};
 })();
 // (Node のテスト用)
 if (typeof module !== 'undefined') module.exports = SSC;
@@ -1010,7 +1018,7 @@ function download(name, blob){
 }
 
 /** ツールの版（ログとお問い合わせメールに入れる） */
-const APP_VER = '0.3 (2026-11-22)';
+const APP_VER = '0.3.1 (2026-11-22)';
 /** お店の情報 */
 const SHOP = {name: 'SYBER SABERS', url: 'https://sybersabers.com/', mail: ['info', 'sybersabers.com'], utm: 'utm_source=soundconverter&utm_medium=referral&utm_campaign=saber_sound_converter'};
 const shopUrl = (path = '') => SHOP.url + path + (path.includes('?') ? '&' : '?') + SHOP.utm;
@@ -1133,9 +1141,9 @@ const App = {
     this.fonts = fonts.map(f => {
       const o = old.get(f.root);
       const det = SSC.detect(f);
-      const sys = SSC.isSystemFolder(f), tracksOnly = SSC.isTracksOnly(f);
-      return Object.assign(f, {det, sys, tracksOnly, alias: o ? o.alias : '',
-        fmt: o ? o.fmt : det.format, include: o ? o.include : det.format !== this.target && !tracksOnly && !sys, exclude: new Map(), wavBad: o ? o.wavBad : null, open: o ? o.open : false});
+      const sys = SSC.isSystemFolder(f), tracksOnly = SSC.isTracksOnly(f), extras = !tracksOnly && !sys && SSC.isExtras(f);
+      return Object.assign(f, {det, sys, tracksOnly, extras, alias: o ? o.alias : '',
+        fmt: o ? o.fmt : det.format, include: o ? o.include : det.format !== this.target && !tracksOnly && !sys && !extras, exclude: new Map(), wavBad: o ? o.wavBad : null, open: o ? o.open : false});
     });
     this.renderAll();
     this.loadFontTxt();
@@ -1219,7 +1227,7 @@ const App = {
     $('tgts').querySelectorAll('[data-tgt]').forEach(b => b.onclick = () => {
       const prev = this.target; this.target = b.dataset.tgt; store.set('target', this.target);
       // 「変換先と同じ形式なので外す」を付け直す
-      for (const f of this.fonts) { if (f.fmt === this.target) f.include = false; else if (f.fmt === prev && !f.tracksOnly) f.include = true; }
+      for (const f of this.fonts) { if (f.fmt === this.target) f.include = false; else if (f.fmt === prev && !f.tracksOnly && !f.sys && !f.extras) f.include = true; }
       this.last = null; this.renderTarget(); this.renderOpts(); this.renderPreview(); this.renderBar();
     });
     this.renderOpts();
@@ -1265,6 +1273,7 @@ const App = {
       if (f.fmt === this.target) warns.unshift(t('same'));
       if (f.tracksOnly) warns.unshift(t('wTracksOnly'));
       if (f.sys) warns.unshift(t('wSystem'));
+      if (f.extras) warns.unshift(t('wExtras'));
       const fmtSel = Object.values(SSC.FORMATS).map(F => `<option value="${F.id}"${F.id === f.fmt ? ' selected' : ''}>${F.label}${F.inputOnly ? ' *' : ''}</option>`).join('');
       const all = pl.items.concat(pl.extra.map(x => ({out: x.out, src: {rel: '(new)'}}))).map(i => `${i.src.rel}  →  ${i.out}`).join('\n');
       const un = pl.unmapped.map(u => `<li><span class="mono">${esc(u.src.rel)}</span> <small>— ${esc(t('why')[u.why] || u.why)}</small></li>`).join('');
