@@ -1,0 +1,32 @@
+Copyright (c) 2026 SYBER SABERS (LS Products / Takahiro Honda). All rights reserved.
+
+本リポジトリのソースコード、デザイン、文章、画像（以下「本ソフトウェア」）の著作権は
+SYBER SABERS に帰属します。
+
+- 公開中のツールは、どなたでも無料でご利用いただけます。
+- 本ソフトウェアの全部または一部を、事前の書面による許可なく複製・改変・再配布・転載・
+  販売すること、および他のサービスやツールに組み込むことを禁止します。
+- GitHub 上での閲覧およびフォークは、GitHub 利用規約の範囲でのみ認められます。
+  これは上記の複製・改変・再配布の許可を意味するものではありません。
+- 本ソフトウェアは現状のまま提供され、いかなる保証もありません。利用によって生じた
+  損害について、SYBER SABERS は責任を負いません。
+
+The source code, design, text and images in this repository ("the Software") are
+the copyrighted work of SYBER SABERS.
+
+- The hosted tool is free for anyone to use.
+- You may not copy, modify, redistribute, republish, sell, or incorporate the Software,
+  in whole or in part, into other services or tools without prior written permission.
+- Viewing and forking on GitHub are permitted only as provided by the GitHub Terms of
+  Service; this grants no permission to copy, modify, or redistribute.
+- The Software is provided "as is", without warranty of any kind. SYBER SABERS is not
+  liable for any damages arising from its use.
+
+Third-party components:
+- Fonts "Chakra Petch" and "Share Tech Mono" are licensed under the SIL Open Font
+  License 1.1 (see FONTS-OFL.txt).
+- ProffieOS is (c) Fredrik Hubinette. Xenopixel, Crystal Focus X (Plecter Labs),
+  Golden Harvest and other names belong to their owners. This tool is unofficial and
+  contains no code from those projects or from other sound font converters.
+
+Contact: info@sybersabers.com
